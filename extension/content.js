@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  // Inject page script interceptor safely
+  // Inject page script interceptor into main document context immediately
   try {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
       const scriptNode = document.createElement('script');
@@ -14,7 +14,7 @@
   if (window.__SPOTIFY_PURGE_LOADED__) return;
   window.__SPOTIFY_PURGE_LOADED__ = true;
 
-  console.log('[Spotify Purge Engine v4.2] Zero-Touch Autonomous Automation Loaded.');
+  console.log('[Spotify Purge Extension v5.0] Developer App OAuth Automation Active.');
 
   let capturedToken = null;
   let isRunning = false;
@@ -27,33 +27,7 @@
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  async function getSessionToken() {
-    if (capturedToken) return capturedToken;
-    if (window.__SPOTIFY_CAPTURED_TOKEN__) return window.__SPOTIFY_CAPTURED_TOKEN__;
-
-    try {
-      const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
-        headers: { 'Accept': 'application/json' }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.accessToken) return data.accessToken;
-      }
-    } catch (e) {}
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.includes('token') || key.includes('session'))) {
-        try {
-          const val = JSON.parse(localStorage.getItem(key));
-          if (val && val.accessToken) return val.accessToken;
-        } catch (e) {}
-      }
-    }
-
-    return null;
-  }
-
+  // --- API CALL WRAPPER (Validates null responses) ---
   async function apiRequest(endpoint, method = 'GET', body = null, token, updateLog = null, retries = 3) {
     const url = endpoint.startsWith('http') ? endpoint : `https://api.spotify.com/v1${endpoint}`;
     const headers = { 'Authorization': `Bearer ${token}` };
@@ -75,7 +49,7 @@
           if (isNaN(waitTimeSec) || waitTimeSec <= 0) waitTimeSec = 3;
           if (waitTimeSec > 8) waitTimeSec = 5;
 
-          if (updateLog) updateLog(`⏳ Rate limit backoff (${waitTimeSec}s)...`, 'warning');
+          if (updateLog) updateLog(`⏳ Spotify Rate Limit reached (429). Retrying in ${waitTimeSec}s...`, 'warning');
           await sleep(waitTimeSec * 1000);
           continue;
         }
@@ -90,17 +64,25 @@
           throw new Error(msg);
         }
 
-        return res.json();
+        const data = await res.json();
+        if (!data) throw new Error('Received empty response from Spotify API.');
+        return data;
       } catch (err) {
         if (attempt === retries) throw err;
-        await sleep(1000);
+        await sleep(1200);
       }
     }
   }
 
+  // --- CORE PURGE EXECUTION ENGINE ---
   async function runAccountPurge(token, updateLog, updateProgress) {
+    updateLog('🔑 Validating active Bearer token with Spotify API...', 'info');
     const user = await apiRequest('/me', 'GET', null, token, updateLog);
-    updateLog(`👤 Logged in User: ${user.display_name || user.id} (${user.id})`, 'success');
+    if (!user || !user.id) {
+      throw new Error('Invalid token response from /v1/me. Account details could not be retrieved.');
+    }
+
+    updateLog(`👤 Logged in as: ${user.display_name || user.id} (${user.id})`, 'success');
 
     // 1. Liked Songs
     updateLog('🔍 Scanning Liked Songs...', 'info');
@@ -159,7 +141,7 @@
       updateLog('✨ All Saved Albums wiped!', 'success');
     }
 
-    // 3. Playlists (Owned & Followed)
+    // 3. Playlists
     updateLog('🔍 Scanning Playlists...', 'info');
     let playlists = [];
     let playlistUrl = '/me/playlists?limit=50';
@@ -171,7 +153,7 @@
       await sleep(50);
     }
 
-    updateLog(`📊 Found ${playlists.length} Playlists. Unfollowing / Deleting...`, 'highlight');
+    updateLog(`📊 Found ${playlists.length} Playlists. Unfollowing...`, 'highlight');
     for (const p of playlists) {
       try {
         await apiRequest(`/playlists/${p.id}/followers`, 'DELETE', null, token, updateLog);
@@ -238,21 +220,27 @@
       ">
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282828; padding-bottom: 8px;">
           <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1db954;">
-            <span>⚡ Autonomous Spotify Purge Bot</span>
+            <span>⚡ Spotify Purge Pro v5.0</span>
           </div>
           <button id="btn-ext-close" style="background: none; border: none; color: #b3b3b3; cursor: pointer; font-size: 16px;">✕</button>
         </div>
 
         <p style="font-size: 12px; color: #b3b3b3; margin: 0;">
-          1-Button Fully Automated Purge Engine. Wipes Liked Songs, Albums, Playlists & Followed Artists.
+          Select authorization method to wipe account library:
         </p>
+
+        <!-- Developer App ID Input -->
+        <div style="display: flex; flex-direction: column; gap: 6px; background: #181818; padding: 10px; border-radius: 8px; border: 1px solid #282828;">
+          <label style="font-size: 10px; color: #999; text-transform: uppercase;">Spotify Developer Client ID</label>
+          <input id="input-dev-client-id" type="text" value="0d5587ddaa23481b993862a77551ca5a" style="background: #000; border: 1px solid #333; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-family: monospace;" />
+        </div>
 
         <div id="purge-ext-progress" style="width: 100%; background: #282828; height: 6px; border-radius: 3px; overflow: hidden; display: none;">
           <div id="purge-ext-fill" style="width: 0%; height: 100%; background: #1db954; transition: width 0.2s;"></div>
         </div>
 
         <div id="purge-ext-logs" style="
-          height: 140px;
+          height: 130px;
           background: #000000;
           border: 1px solid #282828;
           border-radius: 8px;
@@ -264,10 +252,10 @@
           flex-direction: column;
           gap: 4px;
         ">
-          <div style="color: #666;">[System Ready. Click "START AUTOMATED 1-CLICK PURGE"]</div>
+          <div style="color: #666;">[System Ready. Click button below to connect & purge.]</div>
         </div>
 
-        <button id="btn-ext-start-auto" style="
+        <button id="btn-ext-start-oauth" style="
           width: 100%;
           background: linear-gradient(135deg, #1db954, #10b981);
           border: none;
@@ -278,7 +266,7 @@
           border-radius: 8px;
           cursor: pointer;
           box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);
-        ">🔥 START AUTOMATED 1-CLICK PURGE</button>
+        ">🔑 1-CLICK DEVELOPER OAUTH PURGE</button>
       </div>
 
       <button id="btn-ext-toggle" style="
@@ -299,7 +287,8 @@
     const panel = document.getElementById('purge-ext-panel');
     const toggleBtn = document.getElementById('btn-ext-toggle');
     const closeBtn = document.getElementById('btn-ext-close');
-    const startAutoBtn = document.getElementById('btn-ext-start-auto');
+    const startOAuthBtn = document.getElementById('btn-ext-start-oauth');
+    const inputClientId = document.getElementById('input-dev-client-id');
     const logsBox = document.getElementById('purge-ext-logs');
     const progressWrap = document.getElementById('purge-ext-progress');
     const progressFill = document.getElementById('purge-ext-fill');
@@ -328,30 +317,28 @@
       progressFill.style.width = `${pct}%`;
     }
 
-    startAutoBtn.onclick = async () => {
-      if (!confirm('⚠️ Are you sure you want to wipe all account items (Liked Songs, Albums, Playlists, Artists)?')) return;
-
-      startAutoBtn.disabled = true;
-      startAutoBtn.style.opacity = '0.5';
-
-      try {
-        let token = await getSessionToken();
-        if (!token) {
-          const clientId = '0d5587ddaa23481b993862a77551ca5a';
-          const scopes = encodeURIComponent('user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private user-follow-read user-follow-modify');
-          const redirectUri = encodeURIComponent('https://teshrij.xyz/spotify-account-cleaner/');
-          window.location.href = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}&show_dialog=true`;
-          return;
-        }
-
-        await runAccountPurge(token, addLog, updateProgress);
-      } catch (err) {
-        addLog(`❌ Error: ${err.message}`, 'error');
-        alert(`Purge Error: ${err.message}`);
-      } finally {
-        startAutoBtn.disabled = false;
-        startAutoBtn.style.opacity = '1';
+    // Auto-Run Purge if returning from Developer OAuth Callback URL with #access_token=...
+    if (window.location.hash && window.location.hash.includes('access_token=')) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const oauthToken = hashParams.get('access_token');
+      if (oauthToken) {
+        panel.style.display = 'flex';
+        addLog('✅ Developer OAuth Access Token Received!', 'success');
+        runAccountPurge(oauthToken, addLog, updateProgress);
       }
+    }
+
+    startOAuthBtn.onclick = async () => {
+      const clientId = inputClientId.value.trim() || '0d5587ddaa23481b993862a77551ca5a';
+      localStorage.setItem('SPOTIFY_DEV_CLIENT_ID', clientId);
+
+      addLog(`🔑 Initiating Spotify Developer App Authorization...`, 'info');
+
+      const scopes = encodeURIComponent('user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private user-follow-read user-follow-modify');
+      const redirectUri = encodeURIComponent('https://teshrij.xyz/spotify-account-cleaner/');
+      const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}&show_dialog=true`;
+
+      window.location.href = authUrl;
     };
   }
 
