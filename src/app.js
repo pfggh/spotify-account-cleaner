@@ -1,7 +1,9 @@
 import { SpotifyAuth, SpotifyApiClient } from './spotifyApi.js';
+import { exportLibraryToCsv } from './csvExport.js';
 
 let auth;
 let api;
+let currentUserId = 'spotify_user';
 
 // State holding fetched items
 const inventory = {
@@ -28,6 +30,7 @@ const detectedRedirectUri = document.getElementById('detected-redirect-uri');
 const btnScan = document.getElementById('btn-scan');
 const scanBtnSpinner = document.getElementById('scan-btn-spinner');
 const scanBtnText = document.getElementById('scan-btn-text');
+const btnExportCsv = document.getElementById('btn-export-csv');
 
 const countTracks = document.getElementById('count-tracks');
 const countPlaylists = document.getElementById('count-playlists');
@@ -133,6 +136,7 @@ async function setupLoggedInUser() {
 
   try {
     const user = await api.getCurrentUser();
+    currentUserId = user.id || 'spotify_user';
     userName.textContent = user.display_name || user.id;
     if (user.images && user.images.length > 0) {
       userAvatar.src = user.images[0].url;
@@ -177,7 +181,36 @@ btnClearLog.addEventListener('click', () => {
   logWindow.innerHTML = '';
 });
 
+btnExportCsv.addEventListener('click', () => {
+  const total = Object.values(inventory).reduce((acc, arr) => acc + arr.length, 0);
+  if (total === 0) {
+    alert('No items scanned yet. Please click "Scan Account" first to load your library.');
+    return;
+  }
+  log(`Exporting CSV backup for ${total} items...`, 'highlight');
+  exportLibraryToCsv(inventory, currentUserId);
+  log(`CSV export generated and downloaded successfully!`, 'success');
+});
+
 btnScan.addEventListener('click', scanAccount);
+
+function animateCounter(element, targetVal) {
+  let startVal = parseInt(element.textContent || '0', 10);
+  if (isNaN(startVal)) startVal = 0;
+  const duration = 600;
+  const startTime = performance.now();
+
+  function update(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const current = Math.floor(startVal + (targetVal - startVal) * progress);
+    element.textContent = current;
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    }
+  }
+  requestAnimationFrame(update);
+}
 
 async function scanAccount() {
   scanBtnSpinner.classList.remove('hidden');
@@ -189,27 +222,27 @@ async function scanAccount() {
   try {
     log('Fetching Liked Songs...', 'info');
     inventory.tracks = await api.getLikedTracks();
-    countTracks.textContent = inventory.tracks.length;
+    animateCounter(countTracks, inventory.tracks.length);
 
     log('Fetching Playlists...', 'info');
     inventory.playlists = await api.getPlaylists();
-    countPlaylists.textContent = inventory.playlists.length;
+    animateCounter(countPlaylists, inventory.playlists.length);
 
     log('Fetching Saved Albums...', 'info');
     inventory.albums = await api.getSavedAlbums();
-    countAlbums.textContent = inventory.albums.length;
+    animateCounter(countAlbums, inventory.albums.length);
 
     log('Fetching Followed Artists...', 'info');
     inventory.artists = await api.getFollowedArtists();
-    countArtists.textContent = inventory.artists.length;
+    animateCounter(countArtists, inventory.artists.length);
 
     log('Fetching Saved Episodes...', 'info');
     inventory.episodes = await api.getSavedEpisodes();
-    countEpisodes.textContent = inventory.episodes.length;
+    animateCounter(countEpisodes, inventory.episodes.length);
 
     log('Fetching Saved Shows...', 'info');
     inventory.shows = await api.getSavedShows();
-    countShows.textContent = inventory.shows.length;
+    animateCounter(countShows, inventory.shows.length);
 
     const total = Object.values(inventory).reduce((acc, arr) => acc + arr.length, 0);
     log(`Scan complete! Found ${total} total items across your Spotify account.`, 'success');

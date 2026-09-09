@@ -12,21 +12,43 @@
 body {
   font-family: 'Inter', sans-serif;
   background-color: var(--spotify-black);
+  background-image: radial-gradient(circle at 50% 0%, rgba(29, 185, 84, 0.08) 0%, transparent 60%);
   color: white;
+  min-height: 100vh;
 }
 
 .bg-spotify-black { background-color: var(--spotify-black); }
-.bg-spotify-gray-dark { background-color: var(--spotify-gray-dark); }
+.bg-spotify-gray-dark { 
+  background-color: var(--spotify-gray-dark); 
+  backdrop-filter: blur(12px);
+}
 .bg-spotify-gray-light { background-color: var(--spotify-gray-light); }
 .bg-spotify-gray-hover:hover { background-color: var(--spotify-gray-hover); }
 
 .border-spotify-gray-light { border-color: var(--spotify-gray-light); }
 
 .text-spotify-green { color: var(--spotify-green); }
-.bg-spotify-green { background-color: var(--spotify-green); }
-.bg-spotify-green-hover:hover { background-color: var(--spotify-green-hover); }
+.bg-spotify-green { 
+  background-color: var(--spotify-green); 
+  transition: all 0.2s ease-in-out;
+}
+.bg-spotify-green:hover { 
+  background-color: var(--spotify-green-hover);
+  box-shadow: 0 0 20px rgba(29, 185, 84, 0.4);
+  transform: translateY(-1px);
+}
 
 .text-spotify-gray-muted { color: var(--spotify-gray-muted); }
+
+/* Item Card Hover Effects */
+.inventory-card {
+  transition: all 0.2s ease-in-out;
+}
+.inventory-card:hover {
+  border-color: rgba(29, 185, 84, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
 
 /* Custom Scrollbar for Log Window */
 .scrollbar-thin::-webkit-scrollbar {
@@ -41,4 +63,9 @@ body {
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: var(--spotify-gray-hover);
+}
+
+/* Progress bar pulse effect */
+#progress-bar {
+  box-shadow: 0 0 10px rgba(29, 185, 84, 0.6);
 }

@@ -76,10 +76,18 @@
             <h2 class="text-lg font-bold text-white">2. Account Overview</h2>
             <p class="text-sm text-spotify-gray-muted">Scan your account to list all saved content</p>
           </div>
-          <button id="btn-scan" class="bg-spotify-gray-light hover:bg-spotify-gray-hover text-white font-semibold py-2 px-5 rounded-full text-sm transition flex items-center space-x-2">
-            <span id="scan-btn-spinner" class="hidden animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
-            <span id="scan-btn-text">Scan Account</span>
-          </button>
+          <div class="flex items-center space-x-3">
+            <button id="btn-export-csv" class="bg-spotify-gray-light hover:bg-spotify-gray-hover text-spotify-green font-semibold py-2 px-4 rounded-full text-sm transition flex items-center space-x-2 border border-spotify-green/30 hover:border-spotify-green shadow-md">
+              <svg class="w-4 h-4 text-spotify-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              <span>Export CSV Backup</span>
+            </button>
+            <button id="btn-scan" class="bg-spotify-green hover:bg-spotify-green-hover text-black font-bold py-2 px-5 rounded-full text-sm transition flex items-center space-x-2 shadow-md">
+              <span id="scan-btn-spinner" class="hidden animate-spin h-4 w-4 border-2 border-black border-t-transparent rounded-full"></span>
+              <span id="scan-btn-text">Scan Account</span>
+            </button>
+          </div>
         </div>
 
         <!-- Inventory Grid -->
