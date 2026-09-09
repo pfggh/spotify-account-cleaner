@@ -1,18 +1,20 @@
 (function () {
   'use strict';
 
-  // Inject page script interceptor into main document context immediately
-  const scriptNode = document.createElement('script');
-  scriptNode.src = chrome.runtime.getURL('injected_interceptor.js');
-  (document.head || document.documentElement).appendChild(scriptNode);
-  scriptNode.onload = function () {
-    scriptNode.remove();
-  };
+  // Inject page script interceptor safely
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
+      const scriptNode = document.createElement('script');
+      scriptNode.src = chrome.runtime.getURL('injected_interceptor.js');
+      (document.head || document.documentElement).appendChild(scriptNode);
+      scriptNode.onload = function () { scriptNode.remove(); };
+    }
+  } catch (e) {}
 
   if (window.__SPOTIFY_PURGE_LOADED__) return;
   window.__SPOTIFY_PURGE_LOADED__ = true;
 
-  console.log('[Spotify Purge Engine v4.0] Zero-Touch Autonomous Automation Loaded.');
+  console.log('[Spotify Purge Engine v4.2] Zero-Touch Autonomous Automation Loaded.');
 
   let capturedToken = null;
   let isRunning = false;
@@ -96,27 +98,6 @@
     }
   }
 
-  // --- AUTOMATED DEVELOPER DASHBOARD APP CREATION & WHITELISTING BOT ---
-  async function runAutomatedDeveloperAppCreation(updateLog) {
-    updateLog('🤖 Launching Developer Dashboard App Provisioning Bot...', 'info');
-
-    // 1. Open developer dashboard window
-    const devWindow = window.open('https://developer.spotify.com/dashboard', '_blank');
-    if (!devWindow) {
-      updateLog('⚠️ Pop-up blocked! Please allow pop-ups for open.spotify.com.', 'warning');
-      return null;
-    }
-
-    updateLog('⚙️ Navigating Developer Dashboard to Provision New App...', 'info');
-    await sleep(4000);
-
-    // Provide user-guided / automated fallback Client ID
-    const defaultAppId = '0d5587ddaa23481b993862a77551ca5a';
-    updateLog('✅ Spotify Developer App provisioned & Whitelisted!', 'success');
-    return defaultAppId;
-  }
-
-  // --- COMPLETE ACCOUNT PURGE ENGINE ---
   async function runAccountPurge(token, updateLog, updateProgress) {
     const user = await apiRequest('/me', 'GET', null, token, updateLog);
     updateLog(`👤 Logged in User: ${user.display_name || user.id} (${user.id})`, 'success');
@@ -263,7 +244,7 @@
         </div>
 
         <p style="font-size: 12px; color: #b3b3b3; margin: 0;">
-          1-Button Fully Automated Purge Engine. Provisions App, Whitelists Email & Wipes Library.
+          1-Button Fully Automated Purge Engine. Wipes Liked Songs, Albums, Playlists & Followed Artists.
         </p>
 
         <div id="purge-ext-progress" style="width: 100%; background: #282828; height: 6px; border-radius: 3px; overflow: hidden; display: none;">
@@ -347,29 +328,22 @@
       progressFill.style.width = `${pct}%`;
     }
 
-    // 1-Button Fully Automated Orchestration Execution
     startAutoBtn.onclick = async () => {
-      if (!confirm('⚠️ Are you sure you want to run automated Developer App provisioning & wipe all account items?')) return;
+      if (!confirm('⚠️ Are you sure you want to wipe all account items (Liked Songs, Albums, Playlists, Artists)?')) return;
 
       startAutoBtn.disabled = true;
       startAutoBtn.style.opacity = '0.5';
 
       try {
-        // Step 1: Provision App & Whitelist Email via Developer Console Bot
-        const clientId = await runAutomatedDeveloperAppCreation(addLog);
-        
-        // Step 2: Extract active token
         let token = await getSessionToken();
-        if (!token && clientId) {
+        if (!token) {
+          const clientId = '0d5587ddaa23481b993862a77551ca5a';
           const scopes = encodeURIComponent('user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private user-follow-read user-follow-modify');
           const redirectUri = encodeURIComponent('https://teshrij.xyz/spotify-account-cleaner/');
           window.location.href = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}&show_dialog=true`;
           return;
         }
 
-        if (!token) throw new Error('Could not retrieve session token!');
-
-        // Step 3: Run Full Account Purge
         await runAccountPurge(token, addLog, updateProgress);
       } catch (err) {
         addLog(`❌ Error: ${err.message}`, 'error');
