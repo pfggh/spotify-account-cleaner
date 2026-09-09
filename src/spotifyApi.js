@@ -173,7 +173,7 @@ export class SpotifyApiClient {
     const url = endpoint.startsWith('http') ? endpoint : `https://api.spotify.com/v1${endpoint}`;
     const headers = {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers || {})
     };
 
