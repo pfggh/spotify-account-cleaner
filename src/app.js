@@ -177,7 +177,14 @@ async function setupLoggedInUser() {
 function setupEventListeners() {
   const handleLoginClick = (e) => {
     e.preventDefault();
-    auth.clientId = CLIENT_ID;
+    const inputEl = document.getElementById('input-client-id');
+    const customId = (inputEl && inputEl.value.trim()) || window.localStorage.getItem('spotify_custom_client_id') || CLIENT_ID;
+    
+    if (inputEl && inputEl.value.trim()) {
+      window.localStorage.setItem('spotify_custom_client_id', inputEl.value.trim());
+    }
+    
+    auth.clientId = customId;
     auth.redirectUri = window.location.origin + window.location.pathname;
     auth.redirectToAuth();
   };
