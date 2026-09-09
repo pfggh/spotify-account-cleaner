@@ -305,6 +305,7 @@ export class SpotifyApiClient {
 
   async deleteLikedTracks(trackIds, onProgress) {
     const batchSize = 50;
+    let count = 0;
     for (let i = 0; i < trackIds.length; i += batchSize) {
       const batch = trackIds.slice(i, i + batchSize);
       try {
@@ -312,19 +313,34 @@ export class SpotifyApiClient {
           method: 'DELETE',
           body: JSON.stringify({ ids: batch })
         });
+        count += batch.length;
       } catch (e) {
-        // Fallback for CORS/HTTP DELETE body restriction on some Spotify API endpoints
-        await this.request(`/me/tracks?ids=${batch.join(',')}`, {
-          method: 'DELETE'
-        });
+        try {
+          await this.request(`/me/tracks?ids=${batch.join(',')}`, {
+            method: 'DELETE'
+          });
+          count += batch.length;
+        } catch (err) {
+          // Fallback to individual item deletion for local track files / restricted IDs
+          for (const singleId of batch) {
+            try {
+              await this.request(`/me/tracks?ids=${singleId}`, { method: 'DELETE' });
+            } catch (singleErr) {
+              this.log(`Could not remove track ${singleId}: ${singleErr.message}`, 'warning');
+            }
+            count++;
+            if (onProgress) onProgress(count, trackIds.length);
+          }
+        }
       }
-      if (onProgress) onProgress(Math.min(i + batchSize, trackIds.length), trackIds.length);
+      if (onProgress) onProgress(Math.min(count, trackIds.length), trackIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
   }
 
   async deleteSavedAlbums(albumIds, onProgress) {
     const batchSize = 50;
+    let count = 0;
     for (let i = 0; i < albumIds.length; i += batchSize) {
       const batch = albumIds.slice(i, i + batchSize);
       try {
@@ -332,12 +348,26 @@ export class SpotifyApiClient {
           method: 'DELETE',
           body: JSON.stringify({ ids: batch })
         });
+        count += batch.length;
       } catch (e) {
-        await this.request(`/me/albums?ids=${batch.join(',')}`, {
-          method: 'DELETE'
-        });
+        try {
+          await this.request(`/me/albums?ids=${batch.join(',')}`, {
+            method: 'DELETE'
+          });
+          count += batch.length;
+        } catch (err) {
+          for (const singleId of batch) {
+            try {
+              await this.request(`/me/albums?ids=${singleId}`, { method: 'DELETE' });
+            } catch (singleErr) {
+              this.log(`Could not remove album ${singleId}: ${singleErr.message}`, 'warning');
+            }
+            count++;
+            if (onProgress) onProgress(count, albumIds.length);
+          }
+        }
       }
-      if (onProgress) onProgress(Math.min(i + batchSize, albumIds.length), albumIds.length);
+      if (onProgress) onProgress(Math.min(count, albumIds.length), albumIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
   }
