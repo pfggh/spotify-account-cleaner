@@ -308,28 +308,42 @@ export class SpotifyApiClient {
     let count = 0;
     for (let i = 0; i < trackIds.length; i += batchSize) {
       const batch = trackIds.slice(i, i + batchSize);
+      // Attempt 1: Raw JSON Array body (Official Web API spec)
       try {
         await this.request('/me/tracks', {
           method: 'DELETE',
-          body: JSON.stringify({ ids: batch })
+          body: JSON.stringify(batch)
         });
         count += batch.length;
-      } catch (e) {
+      } catch (e1) {
+        // Attempt 2: Object { ids: [...] }
         try {
-          await this.request(`/me/tracks?ids=${batch.join(',')}`, {
-            method: 'DELETE'
+          await this.request('/me/tracks', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids: batch })
           });
           count += batch.length;
-        } catch (err) {
-          // Fallback to individual item deletion for local track files / restricted IDs
-          for (const singleId of batch) {
-            try {
-              await this.request(`/me/tracks?ids=${singleId}`, { method: 'DELETE' });
-            } catch (singleErr) {
-              this.log(`Could not remove track ${singleId}: ${singleErr.message}`, 'warning');
+        } catch (e2) {
+          // Attempt 3: Query Parameter
+          try {
+            await this.request(`/me/tracks?ids=${batch.join(',')}`, {
+              method: 'DELETE'
+            });
+            count += batch.length;
+          } catch (e3) {
+            // Attempt 4: Item-by-Item with array body
+            for (const singleId of batch) {
+              try {
+                await this.request('/me/tracks', {
+                  method: 'DELETE',
+                  body: JSON.stringify([singleId])
+                });
+              } catch (singleErr) {
+                this.log(`Could not remove track ${singleId}: ${singleErr.message}`, 'warning');
+              }
+              count++;
+              if (onProgress) onProgress(count, trackIds.length);
             }
-            count++;
-            if (onProgress) onProgress(count, trackIds.length);
           }
         }
       }
@@ -346,24 +360,35 @@ export class SpotifyApiClient {
       try {
         await this.request('/me/albums', {
           method: 'DELETE',
-          body: JSON.stringify({ ids: batch })
+          body: JSON.stringify(batch)
         });
         count += batch.length;
-      } catch (e) {
+      } catch (e1) {
         try {
-          await this.request(`/me/albums?ids=${batch.join(',')}`, {
-            method: 'DELETE'
+          await this.request('/me/albums', {
+            method: 'DELETE',
+            body: JSON.stringify({ ids: batch })
           });
           count += batch.length;
-        } catch (err) {
-          for (const singleId of batch) {
-            try {
-              await this.request(`/me/albums?ids=${singleId}`, { method: 'DELETE' });
-            } catch (singleErr) {
-              this.log(`Could not remove album ${singleId}: ${singleErr.message}`, 'warning');
+        } catch (e2) {
+          try {
+            await this.request(`/me/albums?ids=${batch.join(',')}`, {
+              method: 'DELETE'
+            });
+            count += batch.length;
+          } catch (e3) {
+            for (const singleId of batch) {
+              try {
+                await this.request('/me/albums', {
+                  method: 'DELETE',
+                  body: JSON.stringify([singleId])
+                });
+              } catch (singleErr) {
+                this.log(`Could not remove album ${singleId}: ${singleErr.message}`, 'warning');
+              }
+              count++;
+              if (onProgress) onProgress(count, albumIds.length);
             }
-            count++;
-            if (onProgress) onProgress(count, albumIds.length);
           }
         }
       }
