@@ -164,13 +164,13 @@ async function setupLoggedInUser() {
     scanAccount();
   } catch (e) {
     if (e.message.includes('403')) {
-      log(`HTTP 403 Error: Your Spotify Account is not whitelisted in Spotify Developer Dashboard!`, 'error');
-      log(`Fix: Go to Developer Dashboard -> Your App -> User Management (Users & Access) and add your Spotify email address.`, 'warning');
+      log(`HTTP 403 Forbidden Error from Spotify API!`, 'error');
+      log(`REASON: Spotify Apps created in Developer Dashboard default to "Development Mode".`, 'error');
+      log(`FIX 1: In Spotify Developer Dashboard -> Apps -> User Management, add your Spotify account email.`, 'warning');
+      log(`FIX 2: Or request "Quota Extension" in Spotify Dashboard to move the app to Production mode.`, 'warning');
     } else {
       log(`Error fetching user profile: ${e.message}`, 'error');
     }
-    auth.logout();
-    showAuthCard();
   }
 }
 
