@@ -307,10 +307,17 @@ export class SpotifyApiClient {
     const batchSize = 50;
     for (let i = 0; i < trackIds.length; i += batchSize) {
       const batch = trackIds.slice(i, i + batchSize);
-      await this.request('/me/tracks', {
-        method: 'DELETE',
-        body: JSON.stringify({ ids: batch })
-      });
+      try {
+        await this.request('/me/tracks', {
+          method: 'DELETE',
+          body: JSON.stringify({ ids: batch })
+        });
+      } catch (e) {
+        // Fallback for CORS/HTTP DELETE body restriction on some Spotify API endpoints
+        await this.request(`/me/tracks?ids=${batch.join(',')}`, {
+          method: 'DELETE'
+        });
+      }
       if (onProgress) onProgress(Math.min(i + batchSize, trackIds.length), trackIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
@@ -320,10 +327,16 @@ export class SpotifyApiClient {
     const batchSize = 50;
     for (let i = 0; i < albumIds.length; i += batchSize) {
       const batch = albumIds.slice(i, i + batchSize);
-      await this.request('/me/albums', {
-        method: 'DELETE',
-        body: JSON.stringify({ ids: batch })
-      });
+      try {
+        await this.request('/me/albums', {
+          method: 'DELETE',
+          body: JSON.stringify({ ids: batch })
+        });
+      } catch (e) {
+        await this.request(`/me/albums?ids=${batch.join(',')}`, {
+          method: 'DELETE'
+        });
+      }
       if (onProgress) onProgress(Math.min(i + batchSize, albumIds.length), albumIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
@@ -344,10 +357,16 @@ export class SpotifyApiClient {
     const batchSize = 50;
     for (let i = 0; i < artistIds.length; i += batchSize) {
       const batch = artistIds.slice(i, i + batchSize);
-      await this.request('/me/following?type=artist', {
-        method: 'DELETE',
-        body: JSON.stringify({ ids: batch })
-      });
+      try {
+        await this.request('/me/following?type=artist', {
+          method: 'DELETE',
+          body: JSON.stringify({ ids: batch })
+        });
+      } catch (e) {
+        await this.request(`/me/following?type=artist&ids=${batch.join(',')}`, {
+          method: 'DELETE'
+        });
+      }
       if (onProgress) onProgress(Math.min(i + batchSize, artistIds.length), artistIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
@@ -357,10 +376,16 @@ export class SpotifyApiClient {
     const batchSize = 50;
     for (let i = 0; i < episodeIds.length; i += batchSize) {
       const batch = episodeIds.slice(i, i + batchSize);
-      await this.request('/me/episodes', {
-        method: 'DELETE',
-        body: JSON.stringify({ ids: batch })
-      });
+      try {
+        await this.request('/me/episodes', {
+          method: 'DELETE',
+          body: JSON.stringify({ ids: batch })
+        });
+      } catch (e) {
+        await this.request(`/me/episodes?ids=${batch.join(',')}`, {
+          method: 'DELETE'
+        });
+      }
       if (onProgress) onProgress(Math.min(i + batchSize, episodeIds.length), episodeIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
