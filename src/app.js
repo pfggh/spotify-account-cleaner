@@ -164,10 +164,9 @@ async function setupLoggedInUser() {
     scanAccount();
   } catch (e) {
     if (e.message.includes('403')) {
-      log(`HTTP 403 Forbidden Error from Spotify API!`, 'error');
-      log(`REASON: Spotify Apps created in Developer Dashboard default to "Development Mode".`, 'error');
-      log(`FIX 1: In Spotify Developer Dashboard -> Apps -> User Management, add your Spotify account email.`, 'warning');
-      log(`FIX 2: Or request "Quota Extension" in Spotify Dashboard to move the app to Production mode.`, 'warning');
+      log(`HTTP 403 Forbidden Error during operations!`, 'error');
+      log(`REASON: Your current login token does not have write/modify permissions, or this account is not in the app's User Management list.`, 'error');
+      log(`SOLUTION: Click "Sign Out" at the top right, verify your Client ID, and click "Sign In with Spotify" again to grant full delete permissions!`, 'warning');
     } else {
       log(`Error fetching user profile: ${e.message}`, 'error');
     }
