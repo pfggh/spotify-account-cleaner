@@ -1,71 +1,59 @@
-/* Custom CSS styles for Spotify Account Cleaner */
+@import "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css";
+
+/* Custom Styling for Spotify Purge Modern UI */
 :root {
-  --spotify-green: #1DB954;
-  --spotify-green-hover: #1ed760;
-  --spotify-black: #121212;
-  --spotify-gray-dark: #181818;
-  --spotify-gray-light: #282828;
-  --spotify-gray-hover: #3e3e3e;
-  --spotify-gray-muted: #b3b3b3;
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 body {
-  font-family: 'Inter', sans-serif;
-  background-color: var(--spotify-black);
-  background-image: radial-gradient(circle at 50% 0%, rgba(29, 185, 84, 0.08) 0%, transparent 60%);
-  color: white;
-  min-height: 100vh;
+  font-family: var(--font-sans);
+  background-color: #090D16;
+  color: #F1F5F9;
 }
 
-.bg-spotify-black { background-color: var(--spotify-black); }
-.bg-spotify-gray-dark { 
-  background-color: var(--spotify-gray-dark); 
-  backdrop-filter: blur(12px);
-}
-.bg-spotify-gray-light { background-color: var(--spotify-gray-light); }
-.bg-spotify-gray-hover:hover { background-color: var(--spotify-gray-hover); }
-
-.border-spotify-gray-light { border-color: var(--spotify-gray-light); }
-
-.text-spotify-green { color: var(--spotify-green); }
-.bg-spotify-green { 
-  background-color: var(--spotify-green); 
-  transition: all 0.2s ease-in-out;
-}
-.bg-spotify-green:hover { 
-  background-color: var(--spotify-green-hover);
-  box-shadow: 0 0 20px rgba(29, 185, 84, 0.4);
-  transform: translateY(-1px);
+/* Glassmorphism Cards */
+.glass-card {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
 }
 
-.text-spotify-gray-muted { color: var(--spotify-gray-muted); }
-
-/* Item Card Hover Effects */
 .inventory-card {
-  transition: all 0.2s ease-in-out;
-}
-.inventory-card:hover {
-  border-color: rgba(29, 185, 84, 0.4);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(10, 15, 26, 0.6);
 }
 
-/* Custom Scrollbar for Log Window */
+.inventory-card:hover {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.15);
+}
+
+/* Scrollbar Customization */
 .scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: var(--spotify-black);
+  background: rgba(0, 0, 0, 0.2);
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: var(--spotify-gray-light);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: var(--spotify-gray-hover);
+  background: rgba(16, 185, 129, 0.4);
 }
 
-/* Progress bar pulse effect */
-#progress-bar {
-  box-shadow: 0 0 10px rgba(29, 185, 84, 0.6);
+/* Simple Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }

@@ -65,14 +65,14 @@ function log(message, type = 'info') {
   const time = new Date().toLocaleTimeString();
   const line = document.createElement('div');
   
-  let colorClass = 'text-spotify-gray-muted';
-  if (type === 'success') colorClass = 'text-spotify-green font-semibold';
-  if (type === 'warning') colorClass = 'text-yellow-400';
-  if (type === 'error') colorClass = 'text-red-400 font-bold';
+  let colorClass = 'text-slate-400';
+  if (type === 'success') colorClass = 'text-emerald-400 font-semibold';
+  if (type === 'warning') colorClass = 'text-amber-300';
+  if (type === 'error') colorClass = 'text-rose-400 font-bold';
   if (type === 'highlight') colorClass = 'text-white font-bold';
 
   line.className = colorClass;
-  line.innerHTML = `<span class="text-spotify-gray-muted/60">[${time}]</span> ${message}`;
+  line.innerHTML = `<span class="text-slate-600">[${time}]</span> ${message}`;
   
   logWindow.appendChild(line);
   logWindow.scrollTop = logWindow.scrollHeight;
