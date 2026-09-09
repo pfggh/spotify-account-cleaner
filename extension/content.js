@@ -1,7 +1,6 @@
 (function () {
   'use strict';
 
-  // Inject page script interceptor into main document context immediately
   const scriptNode = document.createElement('script');
   scriptNode.src = chrome.runtime.getURL('injected_interceptor.js');
   (document.head || document.documentElement).appendChild(scriptNode);
@@ -12,7 +11,7 @@
   if (window.__SPOTIFY_PURGE_LOADED__) return;
   window.__SPOTIFY_PURGE_LOADED__ = true;
 
-  console.log('[Spotify Purge Extension] Content script initialized.');
+  console.log('[Spotify Purge Extension v1.2.0] Loaded with Rate Limit Handling.');
 
   let capturedToken = null;
   let isRunning = false;
@@ -20,31 +19,25 @@
   window.addEventListener('SPOTIFY_TOKEN_CAPTURED', (e) => {
     if (e.detail && e.detail.token) {
       capturedToken = e.detail.token;
-      console.log('[Spotify Purge Extension] Bearer token captured live!');
     }
   });
 
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
   async function getSessionToken() {
     if (capturedToken) return capturedToken;
+    if (window.__SPOTIFY_CAPTURED_TOKEN__) return window.__SPOTIFY_CAPTURED_TOKEN__;
 
-    if (window.__SPOTIFY_CAPTURED_TOKEN__) {
-      return window.__SPOTIFY_CAPTURED_TOKEN__;
-    }
-
-    // Try fetching access token endpoint as secondary strategy
     try {
       const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
         headers: { 'Accept': 'application/json' }
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && data.accessToken) {
-          return data.accessToken;
-        }
+        if (data && data.accessToken) return data.accessToken;
       }
     } catch (e) {}
 
-    // Secondary fallback: search localStorage
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && (key.includes('token') || key.includes('session'))) {
@@ -58,7 +51,8 @@
     return null;
   }
 
-  async function apiRequest(endpoint, method = 'GET', body = null, token) {
+  // API request wrapper with exponential backoff & 429 rate-limit auto-retry
+  async function apiRequest(endpoint, method = 'GET', body = null, token, updateLog = null, retries = 5) {
     const url = endpoint.startsWith('http') ? endpoint : `https://api.spotify.com/v1${endpoint}`;
     const headers = {
       'Authorization': `Bearer ${token}`
@@ -67,23 +61,53 @@
       headers['Content-Type'] = 'application/json';
     }
 
-    const res = await fetch(url, {
-      method: method,
-      headers: headers,
-      body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : null
-    });
-
-    if (res.status === 204) return {};
-    if (!res.ok) {
-      const errText = await res.text();
-      let msg = `HTTP ${res.status} ${res.statusText}`;
+    for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const parsed = JSON.parse(errText);
-        msg = parsed.error?.message || msg;
-      } catch (e) {}
-      throw new Error(msg);
+        const res = await fetch(url, {
+          method: method,
+          headers: headers,
+          body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : null
+        });
+
+        if (res.status === 204) return {};
+
+        if (res.status === 429) {
+          const retryAfterHeader = res.headers.get('Retry-After');
+          let waitTimeSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : (attempt + 1) * 3;
+          if (isNaN(waitTimeSec) || waitTimeSec <= 0) waitTimeSec = (attempt + 1) * 3;
+
+          if (updateLog) {
+            updateLog(`⏳ Spotify Rate Limit reached (429). Pausing for ${waitTimeSec} seconds...`, 'warning');
+          }
+          await sleep(waitTimeSec * 1000);
+          continue; // Retry after waiting
+        }
+
+        if (!res.ok) {
+          const errText = await res.text();
+          let msg = `HTTP ${res.status} ${res.statusText}`;
+          try {
+            const parsed = JSON.parse(errText);
+            msg = parsed.error?.message || msg;
+          } catch (e) {}
+          throw new Error(msg);
+        }
+
+        return res.json();
+      } catch (err) {
+        if (err.message.includes('429') || err.message.toLowerCase().includes('rate limit')) {
+          const waitTimeSec = (attempt + 1) * 4;
+          if (updateLog) {
+            updateLog(`⏳ Rate limit backoff (${attempt + 1}/${retries}). Waiting ${waitTimeSec}s...`, 'warning');
+          }
+          await sleep(waitTimeSec * 1000);
+          continue;
+        }
+
+        if (attempt === retries) throw err;
+        await sleep(1500);
+      }
     }
-    return res.json();
   }
 
   async function runAccountPurge(updateLog, updateProgress) {
@@ -91,27 +115,28 @@
     isRunning = true;
 
     try {
-      updateLog('🔑 Extracting active Spotify session token...', 'info');
+      updateLog('🔑 Extracting Spotify session token...', 'info');
       const token = await getSessionToken();
 
       if (!token) {
-        throw new Error('No active session token captured yet. Please refresh the page or click around Spotify once while logged in!');
+        throw new Error('No session token found. Please click around Spotify once while logged in!');
       }
 
-      updateLog('✅ Session authenticated successfully!', 'success');
+      updateLog('✅ Authenticated successfully!', 'success');
 
-      const user = await apiRequest('/me', 'GET', null, token);
-      updateLog(`👤 Logged in as: ${user.display_name || user.id} (${user.id})`, 'success');
+      const user = await apiRequest('/me', 'GET', null, token, updateLog);
+      updateLog(`👤 Wiping library for: ${user.display_name || user.id} (${user.id})`, 'success');
 
-      // 1. Liked Songs
+      // 1. Liked Songs Purge
       updateLog('🔍 Scanning Liked Songs...', 'info');
       let likedTracks = [];
       let nextUrl = '/me/tracks?limit=50';
       while (nextUrl) {
-        const res = await apiRequest(nextUrl, 'GET', null, token);
+        const res = await apiRequest(nextUrl, 'GET', null, token, updateLog);
         if (!res || !res.items) break;
         likedTracks = likedTracks.concat(res.items);
         nextUrl = res.next;
+        await sleep(100); // 100ms request pacing to prevent rate limits
       }
 
       updateLog(`📊 Found ${likedTracks.length} Liked Songs. Deleting...`, 'highlight');
@@ -121,30 +146,33 @@
           const batch = trackUris.slice(i, i + 50);
           updateProgress(i, trackUris.length, 'Liked Songs');
           try {
-            await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, token);
+            await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, token, updateLog);
             updateLog(`✔ Deleted batch ${Math.floor(i / 50) + 1} (${Math.min(i + 50, trackUris.length)}/${trackUris.length})`, 'info');
           } catch (e) {
-            updateLog(`⚠️ Batch fallback active: ${e.message}`, 'warning');
+            updateLog(`⚠️ Batch retry / single fallback active: ${e.message}`, 'warning');
             for (const singleUri of batch) {
               try {
-                await apiRequest(`/me/library?uris=${encodeURIComponent(singleUri)}`, 'DELETE', null, token);
+                await apiRequest(`/me/library?uris=${encodeURIComponent(singleUri)}`, 'DELETE', null, token, updateLog);
+                await sleep(150);
               } catch (err) {}
             }
           }
+          await sleep(250); // Batch spacing pause
         }
         updateProgress(trackUris.length, trackUris.length, 'Liked Songs');
         updateLog('✨ All Liked Songs deleted!', 'success');
       }
 
-      // 2. Saved Albums
+      // 2. Saved Albums Purge
       updateLog('🔍 Scanning Saved Albums...', 'info');
       let savedAlbums = [];
       let albumUrl = '/me/albums?limit=50';
       while (albumUrl) {
-        const res = await apiRequest(albumUrl, 'GET', null, token);
+        const res = await apiRequest(albumUrl, 'GET', null, token, updateLog);
         if (!res || !res.items) break;
         savedAlbums = savedAlbums.concat(res.items);
         albumUrl = res.next;
+        await sleep(100);
       }
 
       updateLog(`📊 Found ${savedAlbums.length} Saved Albums. Deleting...`, 'highlight');
@@ -153,38 +181,42 @@
         for (let i = 0; i < albumUris.length; i += 50) {
           const batch = albumUris.slice(i, i + 50);
           try {
-            await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, token);
+            await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, token, updateLog);
           } catch (e) {
             for (const singleUri of batch) {
               try {
-                await apiRequest(`/me/library?uris=${encodeURIComponent(singleUri)}`, 'DELETE', null, token);
+                await apiRequest(`/me/library?uris=${encodeURIComponent(singleUri)}`, 'DELETE', null, token, updateLog);
+                await sleep(150);
               } catch (err) {}
             }
           }
+          await sleep(250);
         }
         updateLog('✨ All Saved Albums deleted!', 'success');
       }
 
-      // 3. Playlists
+      // 3. Playlists Purge
       updateLog('🔍 Scanning Playlists...', 'info');
       let playlists = [];
       let playlistUrl = '/me/playlists?limit=50';
       while (playlistUrl) {
-        const res = await apiRequest(playlistUrl, 'GET', null, token);
+        const res = await apiRequest(playlistUrl, 'GET', null, token, updateLog);
         if (!res || !res.items) break;
         playlists = playlists.concat(res.items);
         playlistUrl = res.next;
+        await sleep(100);
       }
 
       updateLog(`📊 Found ${playlists.length} Playlists. Unfollowing...`, 'highlight');
       for (let i = 0; i < playlists.length; i++) {
         const p = playlists[i];
         try {
-          await apiRequest(`/playlists/${p.id}/followers`, 'DELETE', null, token);
+          await apiRequest(`/playlists/${p.id}/followers`, 'DELETE', null, token, updateLog);
           updateLog(`✔ Unfollowed: ${p.name}`, 'info');
         } catch (e) {
           updateLog(`Could not unfollow ${p.name}: ${e.message}`, 'warning');
         }
+        await sleep(200);
       }
 
       updateLog('🎉 SUCCESS! Spotify account library wiped clean!', 'success');
@@ -227,13 +259,13 @@
       ">
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282828; padding-bottom: 8px;">
           <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1db954;">
-            <span>⚡ Spotify Purge Extension</span>
+            <span>⚡ Spotify Purge Extension v1.2.0</span>
           </div>
           <button id="btn-ext-close" style="background: none; border: none; color: #b3b3b3; cursor: pointer; font-size: 16px;">✕</button>
         </div>
 
         <p style="font-size: 12px; color: #b3b3b3; margin: 0;">
-          Battle-tested Chrome Extension. Wipes all Liked Songs, Saved Albums & Playlists.
+          Battle-tested Chrome Extension with Rate Limit Protection. Wipes all Liked Songs, Albums & Playlists.
         </p>
 
         <div id="purge-ext-progress" style="width: 100%; background: #282828; height: 6px; border-radius: 3px; overflow: hidden; display: none;">
