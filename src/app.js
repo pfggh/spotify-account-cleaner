@@ -175,14 +175,24 @@ async function setupLoggedInUser() {
 }
 
 function setupEventListeners() {
+  const handleLoginClick = (e) => {
+    e.preventDefault();
+    auth.clientId = CLIENT_ID;
+    auth.redirectUri = window.location.origin + window.location.pathname;
+    auth.redirectToAuth();
+  };
+
   if (btnLogin) {
-    btnLogin.addEventListener('click', (e) => {
-      e.preventDefault();
-      auth.clientId = CLIENT_ID;
-      auth.redirectUri = window.location.origin + window.location.pathname;
-      auth.redirectToAuth();
-    });
+    btnLogin.addEventListener('click', handleLoginClick);
   }
+
+  // Global event delegation fallback
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('#btn-login');
+    if (target) {
+      handleLoginClick(e);
+    }
+  });
 
   if (btnLogout) {
     btnLogout.addEventListener('click', () => {
