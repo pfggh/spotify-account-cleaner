@@ -11,11 +11,23 @@ export const SCOPES = [
   'user-follow-modify'
 ].join(' ');
 
-// Helpers for PKCE Flow
 function generateRandomString(length) {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   const values = crypto.getRandomValues(new Uint8Array(length));
   return values.reduce((acc, x) => acc + possible[x % possible.length], '');
+}
+
+async function sha256(plain) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plain);
+  return crypto.subtle.digest('SHA-256', data);
+}
+
+function base64encode(input) {
+  return btoa(String.fromCharCode(...new Uint8Array(input)))
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
 }
 
 export class SpotifyAuth {
@@ -24,16 +36,38 @@ export class SpotifyAuth {
     this.redirectUri = redirectUri || (window.location.origin + window.location.pathname);
   }
 
-  redirectToAuth() {
+  async redirectToAuth() {
+    const codeVerifier = generateRandomString(64);
+    window.localStorage.setItem('spotify_code_verifier', codeVerifier);
+    window.localStorage.setItem('spotify_client_id', this.clientId);
+
+    let codeChallenge = '';
+    try {
+      if (window.crypto && window.crypto.subtle) {
+        const hashed = await sha256(codeVerifier);
+        codeChallenge = base64encode(hashed);
+      }
+    } catch (e) {
+      console.warn('Crypto.subtle failed, fallback to plain verifier:', e);
+    }
+
     const redirectTarget = this.redirectUri || (window.location.origin + window.location.pathname);
 
     const params = new URLSearchParams({
       client_id: this.clientId,
-      response_type: 'token',
+      response_type: 'code',
       redirect_uri: redirectTarget,
       scope: SCOPES,
       show_dialog: 'true'
     });
+
+    if (codeChallenge) {
+      params.append('code_challenge_method', 'S256');
+      params.append('code_challenge', codeChallenge);
+    } else {
+      params.append('code_challenge_method', 'plain');
+      params.append('code_challenge', codeVerifier);
+    }
 
     const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
     window.location.href = authUrl;
