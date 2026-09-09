@@ -423,13 +423,34 @@ export class SpotifyApiClient {
 
   async deleteSavedShows(showIds, onProgress) {
     const batchSize = 50;
+    let count = 0;
     for (let i = 0; i < showIds.length; i += batchSize) {
       const batch = showIds.slice(i, i + batchSize);
-      await this.request('/me/shows', {
-        method: 'DELETE',
-        body: JSON.stringify({ ids: batch })
-      });
-      if (onProgress) onProgress(Math.min(i + batchSize, showIds.length), showIds.length);
+      try {
+        await this.request('/me/shows', {
+          method: 'DELETE',
+          body: JSON.stringify({ ids: batch })
+        });
+        count += batch.length;
+      } catch (e) {
+        try {
+          await this.request(`/me/shows?ids=${batch.join(',')}`, {
+            method: 'DELETE'
+          });
+          count += batch.length;
+        } catch (err) {
+          for (const singleId of batch) {
+            try {
+              await this.request(`/me/shows?ids=${singleId}`, { method: 'DELETE' });
+            } catch (singleErr) {
+              this.log(`Could not remove show ${singleErr.message}`, 'warning');
+            }
+            count++;
+            if (onProgress) onProgress(count, showIds.length);
+          }
+        }
+      }
+      if (onProgress) onProgress(Math.min(count, showIds.length), showIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
   }
