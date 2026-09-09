@@ -1,7 +1,6 @@
 (function () {
   'use strict';
 
-  // Inject page script interceptor into main document context immediately
   try {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
       const scriptNode = document.createElement('script');
@@ -14,7 +13,7 @@
   if (window.__SPOTIFY_PURGE_LOADED__) return;
   window.__SPOTIFY_PURGE_LOADED__ = true;
 
-  console.log('[Spotify Purge Extension v5.0] Developer App OAuth Automation Active.');
+  console.log('[Spotify Purge Engine v6.0] Authorization Code PKCE Engine Loaded.');
 
   let capturedToken = null;
   let isRunning = false;
@@ -27,7 +26,27 @@
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // --- API CALL WRAPPER (Validates null responses) ---
+  // --- PKCE HELPER FUNCTIONS ---
+  function generateRandomString(length) {
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+    let text = '';
+    for (let i = 0; i < length; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+  }
+
+  async function generateCodeChallenge(codeVerifier) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(codeVerifier);
+    const digest = await window.crypto.subtle.digest('SHA-256', data);
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(digest)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  // --- API CALL WRAPPER ---
   async function apiRequest(endpoint, method = 'GET', body = null, token, updateLog = null, retries = 3) {
     const url = endpoint.startsWith('http') ? endpoint : `https://api.spotify.com/v1${endpoint}`;
     const headers = { 'Authorization': `Bearer ${token}` };
@@ -49,7 +68,7 @@
           if (isNaN(waitTimeSec) || waitTimeSec <= 0) waitTimeSec = 3;
           if (waitTimeSec > 8) waitTimeSec = 5;
 
-          if (updateLog) updateLog(`⏳ Spotify Rate Limit reached (429). Retrying in ${waitTimeSec}s...`, 'warning');
+          if (updateLog) updateLog(`⏳ Rate limit backoff (${waitTimeSec}s)...`, 'warning');
           await sleep(waitTimeSec * 1000);
           continue;
         }
@@ -69,20 +88,20 @@
         return data;
       } catch (err) {
         if (attempt === retries) throw err;
-        await sleep(1200);
+        await sleep(1000);
       }
     }
   }
 
-  // --- CORE PURGE EXECUTION ENGINE ---
+  // --- COMPLETE ACCOUNT PURGE EXECUTION ENGINE ---
   async function runAccountPurge(token, updateLog, updateProgress) {
-    updateLog('🔑 Validating active Bearer token with Spotify API...', 'info');
+    updateLog('🔑 Validating Bearer Access Token with Spotify API...', 'info');
     const user = await apiRequest('/me', 'GET', null, token, updateLog);
     if (!user || !user.id) {
-      throw new Error('Invalid token response from /v1/me. Account details could not be retrieved.');
+      throw new Error('Could not retrieve user details from /v1/me');
     }
 
-    updateLog(`👤 Logged in as: ${user.display_name || user.id} (${user.id})`, 'success');
+    updateLog(`👤 Authenticated Account: ${user.display_name || user.id} (${user.id})`, 'success');
 
     // 1. Liked Songs
     updateLog('🔍 Scanning Liked Songs...', 'info');
@@ -96,7 +115,7 @@
       await sleep(50);
     }
 
-    updateLog(`📊 Found ${likedTracks.length} Liked Songs. Purging...`, 'highlight');
+    updateLog(`📊 Found ${likedTracks.length} Liked Songs. Deleting...`, 'highlight');
     if (likedTracks.length > 0) {
       const trackUris = likedTracks.map(item => item.track?.uri || `spotify:track:${item.track?.id}`).filter(Boolean);
       for (let i = 0; i < trackUris.length; i += 50) {
@@ -104,7 +123,7 @@
         updateProgress(i, trackUris.length);
         try {
           await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, token, updateLog);
-          updateLog(`✔ Purged batch ${Math.floor(i / 50) + 1} (${Math.min(i + 50, trackUris.length)}/${trackUris.length})`, 'info');
+          updateLog(`✔ Deleted batch ${Math.floor(i / 50) + 1} (${Math.min(i + 50, trackUris.length)}/${trackUris.length})`, 'info');
         } catch (e) {
           for (const u of batch) {
             try { await apiRequest(`/me/library?uris=${encodeURIComponent(u)}`, 'DELETE', null, token, updateLog); } catch (err) {}
@@ -128,7 +147,7 @@
       await sleep(50);
     }
 
-    updateLog(`📊 Found ${savedAlbums.length} Saved Albums. Purging...`, 'highlight');
+    updateLog(`📊 Found ${savedAlbums.length} Saved Albums. Deleting...`, 'highlight');
     if (savedAlbums.length > 0) {
       const albumUris = savedAlbums.map(item => item.album?.uri || `spotify:album:${item.album?.id}`).filter(Boolean);
       for (let i = 0; i < albumUris.length; i += 50) {
@@ -141,7 +160,7 @@
       updateLog('✨ All Saved Albums wiped!', 'success');
     }
 
-    // 3. Playlists
+    // 3. Playlists (Owned & Followed)
     updateLog('🔍 Scanning Playlists...', 'info');
     let playlists = [];
     let playlistUrl = '/me/playlists?limit=50';
@@ -157,7 +176,7 @@
     for (const p of playlists) {
       try {
         await apiRequest(`/playlists/${p.id}/followers`, 'DELETE', null, token, updateLog);
-        updateLog(`✔ Removed playlist: ${p.name}`, 'info');
+        updateLog(`✔ Unfollowed/Deleted playlist: ${p.name}`, 'info');
       } catch (e) {}
       await sleep(100);
     }
@@ -220,16 +239,11 @@
       ">
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #282828; padding-bottom: 8px;">
           <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #1db954;">
-            <span>⚡ Spotify Purge Pro v5.0</span>
+            <span>⚡ Spotify Purge Pro v6.0 (PKCE)</span>
           </div>
           <button id="btn-ext-close" style="background: none; border: none; color: #b3b3b3; cursor: pointer; font-size: 16px;">✕</button>
         </div>
 
-        <p style="font-size: 12px; color: #b3b3b3; margin: 0;">
-          Select authorization method to wipe account library:
-        </p>
-
-        <!-- Developer App ID Input -->
         <div style="display: flex; flex-direction: column; gap: 6px; background: #181818; padding: 10px; border-radius: 8px; border: 1px solid #282828;">
           <label style="font-size: 10px; color: #999; text-transform: uppercase;">Spotify Developer Client ID</label>
           <input id="input-dev-client-id" type="text" value="0d5587ddaa23481b993862a77551ca5a" style="background: #000; border: 1px solid #333; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-family: monospace;" />
@@ -252,10 +266,10 @@
           flex-direction: column;
           gap: 4px;
         ">
-          <div style="color: #666;">[System Ready. Click button below to connect & purge.]</div>
+          <div style="color: #666;">[System Ready. Click button below to start Authorization Code PKCE Purge.]</div>
         </div>
 
-        <button id="btn-ext-start-oauth" style="
+        <button id="btn-ext-start-pkce" style="
           width: 100%;
           background: linear-gradient(135deg, #1db954, #10b981);
           border: none;
@@ -266,7 +280,7 @@
           border-radius: 8px;
           cursor: pointer;
           box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);
-        ">🔑 1-CLICK DEVELOPER OAUTH PURGE</button>
+        ">🔑 1-CLICK AUTH CODE (response_type=code) PURGE</button>
       </div>
 
       <button id="btn-ext-toggle" style="
@@ -287,7 +301,7 @@
     const panel = document.getElementById('purge-ext-panel');
     const toggleBtn = document.getElementById('btn-ext-toggle');
     const closeBtn = document.getElementById('btn-ext-close');
-    const startOAuthBtn = document.getElementById('btn-ext-start-oauth');
+    const startPkceBtn = document.getElementById('btn-ext-start-pkce');
     const inputClientId = document.getElementById('input-dev-client-id');
     const logsBox = document.getElementById('purge-ext-logs');
     const progressWrap = document.getElementById('purge-ext-progress');
@@ -317,26 +331,69 @@
       progressFill.style.width = `${pct}%`;
     }
 
-    // Auto-Run Purge if returning from Developer OAuth Callback URL with #access_token=...
-    if (window.location.hash && window.location.hash.includes('access_token=')) {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const oauthToken = hashParams.get('access_token');
-      if (oauthToken) {
+    // --- AUTOMATIC EXCHANGE OF AUTHORIZATION CODE FOR ACCESS TOKEN ON REDIRECT ---
+    async function handleAuthCodeCallback() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      if (code) {
         panel.style.display = 'flex';
-        addLog('✅ Developer OAuth Access Token Received!', 'success');
-        runAccountPurge(oauthToken, addLog, updateProgress);
+        addLog('✅ Authorization Code received! Exchanging for Access Token...', 'info');
+
+        const clientId = localStorage.getItem('SPOTIFY_DEV_CLIENT_ID') || '0d5587ddaa23481b993862a77551ca5a';
+        const codeVerifier = localStorage.getItem('SPOTIFY_PKCE_VERIFIER');
+        const redirectUri = window.location.origin + window.location.pathname;
+
+        try {
+          const body = new URLSearchParams({
+            client_id: clientId,
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: redirectUri,
+            code_verifier: codeVerifier
+          });
+
+          const response = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+          });
+
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Token exchange failed: ${errText}`);
+          }
+
+          const tokenData = await response.json();
+          addLog('🎉 Access Token successfully acquired via PKCE Grant!', 'success');
+
+          // Clean URL params cleanly without page refresh
+          window.history.replaceState({}, document.title, window.location.pathname);
+
+          // Run full purge
+          runAccountPurge(tokenData.access_token, addLog, updateProgress);
+        } catch (err) {
+          addLog(`❌ Token Exchange Error: ${err.message}`, 'error');
+        }
       }
     }
 
-    startOAuthBtn.onclick = async () => {
+    handleAuthCodeCallback();
+
+    // Trigger OAuth Authorization Code PKCE Flow
+    startPkceBtn.onclick = async () => {
       const clientId = inputClientId.value.trim() || '0d5587ddaa23481b993862a77551ca5a';
       localStorage.setItem('SPOTIFY_DEV_CLIENT_ID', clientId);
 
-      addLog(`🔑 Initiating Spotify Developer App Authorization...`, 'info');
+      const verifier = generateRandomString(64);
+      const challenge = await generateCodeChallenge(verifier);
+      localStorage.setItem('SPOTIFY_PKCE_VERIFIER', verifier);
+
+      addLog('🔑 Initiating Authorization Code Flow (response_type=code)...', 'info');
 
       const scopes = encodeURIComponent('user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private user-follow-read user-follow-modify');
-      const redirectUri = encodeURIComponent('https://teshrij.xyz/spotify-account-cleaner/');
-      const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}&show_dialog=true`;
+      const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+
+      const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scopes}&code_challenge_method=S256&code_challenge=${challenge}&show_dialog=true`;
 
       window.location.href = authUrl;
     };
