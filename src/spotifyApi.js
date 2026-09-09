@@ -308,34 +308,41 @@ export class SpotifyApiClient {
     let count = 0;
     for (let i = 0; i < trackIds.length; i += batchSize) {
       const batch = trackIds.slice(i, i + batchSize);
-      // Attempt 1: Query parameter format (Accepted by Spotify API CORS)
+      let success = false;
+
+      // Attempt 1: Query parameters (DELETE /me/tracks?ids=...)
       try {
         await this.request(`/me/tracks?ids=${batch.join(',')}`, {
           method: 'DELETE'
         });
         count += batch.length;
+        success = true;
       } catch (e1) {
-        // Attempt 2: Body array
+        this.log(`Batch query delete failed (${e1.message}). Retrying with JSON array body...`, 'warning');
+        // Attempt 2: JSON array body
         try {
           await this.request('/me/tracks', {
             method: 'DELETE',
             body: JSON.stringify(batch)
           });
           count += batch.length;
+          success = true;
         } catch (e2) {
+          this.log(`Batch body delete failed (${e2.message}). Falling back to item-by-item...`, 'warning');
           // Attempt 3: Individual item delete fallback
           for (const singleId of batch) {
             try {
               await this.request(`/me/tracks?ids=${singleId}`, { method: 'DELETE' });
+              count++;
             } catch (singleErr) {
               this.log(`Could not remove track ${singleId}: ${singleErr.message}`, 'warning');
             }
-            count++;
             if (onProgress) onProgress(count, trackIds.length);
           }
+          success = true;
         }
       }
-      if (onProgress) onProgress(Math.min(count, trackIds.length), trackIds.length);
+      if (onProgress && success) onProgress(Math.min(count, trackIds.length), trackIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
   }
