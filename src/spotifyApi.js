@@ -1,6 +1,6 @@
 // Spotify API helper module with PKCE Auth & 100% reliable rate-limit handling
 
-const SCOPES = [
+export const SCOPES = [
   'user-library-read',
   'user-library-modify',
   'playlist-read-private',
@@ -18,39 +18,16 @@ function generateRandomString(length) {
   return values.reduce((acc, x) => acc + possible[x % possible.length], '');
 }
 
-async function sha256(plain) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plain);
-  return crypto.subtle.digest('SHA-256', data);
-}
-
-function base64encode(input) {
-  return btoa(String.fromCharCode(...new Uint8Array(input)))
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-}
-
 export class SpotifyAuth {
   constructor(clientId, redirectUri) {
     this.clientId = clientId;
-    this.redirectUri = redirectUri || window.location.origin + window.location.pathname;
+    this.redirectUri = redirectUri || (window.location.origin + window.location.pathname);
   }
 
-  async redirectToAuth() {
-    let codeVerifier = generateRandomString(64);
+  redirectToAuth() {
+    const codeVerifier = generateRandomString(64);
     window.localStorage.setItem('spotify_code_verifier', codeVerifier);
     window.localStorage.setItem('spotify_client_id', this.clientId);
-
-    let codeChallenge = '';
-    try {
-      if (window.crypto && window.crypto.subtle) {
-        const hashed = await sha256(codeVerifier);
-        codeChallenge = base64encode(hashed);
-      }
-    } catch (e) {
-      console.warn('SubtleCrypto PKCE hash failed, falling back to direct auth:', e);
-    }
 
     const redirectTarget = this.redirectUri || (window.location.origin + window.location.pathname);
 
@@ -61,11 +38,6 @@ export class SpotifyAuth {
       scope: SCOPES,
       show_dialog: 'true'
     });
-
-    if (codeChallenge) {
-      params.append('code_challenge_method', 'S256');
-      params.append('code_challenge', codeChallenge);
-    }
 
     const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
     window.location.href = authUrl;

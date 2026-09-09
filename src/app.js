@@ -16,50 +16,11 @@ const inventory = {
 };
 
 // DOM Elements
-const cardAuth = document.getElementById('card-auth');
-const cardDashboard = document.getElementById('card-dashboard');
-const inputClientId = document.getElementById('input-client-id');
-const btnLogin = document.getElementById('btn-login');
-const btnLogout = document.getElementById('btn-logout');
-const userProfile = document.getElementById('user-profile');
-const userAvatar = document.getElementById('user-avatar');
-const userName = document.getElementById('user-name');
-const inputRedirectUri = document.getElementById('input-redirect-uri');
-const detectedRedirectUri = document.getElementById('detected-redirect-uri');
+const CLIENT_ID = '4007674e2eb842958dd17309b805cd69';
+const redirectUri = window.location.origin + window.location.pathname;
 
-const btnScan = document.getElementById('btn-scan');
-const scanBtnSpinner = document.getElementById('scan-btn-spinner');
-const scanBtnText = document.getElementById('scan-btn-text');
-const btnExportCsv = document.getElementById('btn-export-csv');
-
-const countTracks = document.getElementById('count-tracks');
-const countPlaylists = document.getElementById('count-playlists');
-const countAlbums = document.getElementById('count-albums');
-const countArtists = document.getElementById('count-artists');
-const countEpisodes = document.getElementById('count-episodes');
-const countShows = document.getElementById('count-shows');
-
-const chkTracks = document.getElementById('chk-tracks');
-const chkPlaylists = document.getElementById('chk-playlists');
-const chkAlbums = document.getElementById('chk-albums');
-const chkArtists = document.getElementById('chk-artists');
-const chkEpisodes = document.getElementById('chk-episodes');
-const chkShows = document.getElementById('chk-shows');
-
-const btnTriggerClean = document.getElementById('btn-trigger-clean');
-const progressContainer = document.getElementById('progress-container');
-const progressStatus = document.getElementById('progress-status');
-const progressPercentage = document.getElementById('progress-percentage');
-const progressBar = document.getElementById('progress-bar');
-const logWindow = document.getElementById('log-window');
-const btnClearLog = document.getElementById('btn-clear-log');
-
-// Modal Elements
-const modalConfirm = document.getElementById('modal-confirm');
-const modalTotalCount = document.getElementById('modal-total-count');
-const inputConfirmText = document.getElementById('input-confirm-text');
-const btnModalCancel = document.getElementById('btn-modal-cancel');
-const btnModalConfirm = document.getElementById('btn-modal-confirm');
+auth = new SpotifyAuth(CLIENT_ID, redirectUri);
+api = new SpotifyApiClient(auth);
 
 function log(message, type = 'info') {
   const time = new Date().toLocaleTimeString();
@@ -74,20 +35,16 @@ function log(message, type = 'info') {
   line.className = colorClass;
   line.innerHTML = `<span class="text-slate-600">[${time}]</span> ${message}`;
   
-  logWindow.appendChild(line);
-  logWindow.scrollTop = logWindow.scrollHeight;
+  if (logWindow) {
+    logWindow.appendChild(line);
+    logWindow.scrollTop = logWindow.scrollHeight;
+  }
 }
 
-const CLIENT_ID = '4007674e2eb842958dd17309b805cd69';
+api.onLog = log;
 
 // Initialize application
 async function init() {
-  const redirectUri = window.location.origin + window.location.pathname;
-
-  auth = new SpotifyAuth(CLIENT_ID, redirectUri);
-  api = new SpotifyApiClient(auth);
-  api.onLog = log;
-
   // Handle OAuth Redirect Code
   const urlParams = new URLSearchParams(window.location.search);
   const code = urlParams.get('code');
@@ -112,23 +69,23 @@ async function init() {
 }
 
 function showAuthCard() {
-  cardAuth.classList.remove('hidden');
-  cardDashboard.classList.add('hidden');
-  userProfile.classList.add('hidden');
+  if (cardAuth) cardAuth.classList.remove('hidden');
+  if (cardDashboard) cardDashboard.classList.add('hidden');
+  if (userProfile) userProfile.classList.add('hidden');
 }
 
 async function setupLoggedInUser() {
-  cardAuth.classList.add('hidden');
-  cardDashboard.classList.remove('hidden');
-  userProfile.classList.remove('hidden');
+  if (cardAuth) cardAuth.classList.add('hidden');
+  if (cardDashboard) cardDashboard.classList.remove('hidden');
+  if (userProfile) userProfile.classList.remove('hidden');
 
   try {
     const user = await api.getCurrentUser();
     currentUserId = user.id || 'spotify_user';
-    userName.textContent = user.display_name || user.id;
-    if (user.images && user.images.length > 0) {
+    if (userName) userName.textContent = user.display_name || user.id;
+    if (user.images && user.images.length > 0 && userAvatar) {
       userAvatar.src = user.images[0].url;
-    } else {
+    } else if (userAvatar) {
       userAvatar.src = 'https://picsum.photos/32';
     }
     log(`Logged in as Spotify user: ${user.display_name} (${user.id})`, 'success');
@@ -148,28 +105,14 @@ async function setupLoggedInUser() {
 }
 
 // Event Listeners
-btnLogin.addEventListener('click', async (e) => {
-  e.preventDefault();
-  try {
+if (btnLogin) {
+  btnLogin.addEventListener('click', (e) => {
+    e.preventDefault();
     auth.clientId = CLIENT_ID;
     auth.redirectUri = window.location.origin + window.location.pathname;
-    await auth.redirectToAuth();
-  } catch (err) {
-    console.error('Redirect failed, executing direct fallback:', err);
-    const scopes = encodeURIComponent([
-      'user-library-read',
-      'user-library-modify',
-      'playlist-read-private',
-      'playlist-read-collaborative',
-      'playlist-modify-public',
-      'playlist-modify-private',
-      'user-follow-read',
-      'user-follow-modify'
-    ].join(' '));
-    const target = encodeURIComponent(window.location.origin + window.location.pathname);
-    window.location.href = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${target}&scope=${scopes}&show_dialog=true`;
-  }
-});
+    auth.redirectToAuth();
+  });
+}
 
 btnLogout.addEventListener('click', () => {
   auth.logout();
