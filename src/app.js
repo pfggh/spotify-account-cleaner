@@ -78,25 +78,13 @@ function log(message, type = 'info') {
   logWindow.scrollTop = logWindow.scrollHeight;
 }
 
+const CLIENT_ID = '4007674e2eb842958dd17309b805cd69';
+
 // Initialize application
 async function init() {
-  const defaultRedirectUri = window.location.origin + window.location.pathname;
-  const savedRedirectUri = window.localStorage.getItem('spotify_redirect_uri') || defaultRedirectUri;
+  const redirectUri = window.location.origin + window.location.pathname;
 
-  if (inputRedirectUri) inputRedirectUri.value = savedRedirectUri;
-  if (detectedRedirectUri) detectedRedirectUri.textContent = savedRedirectUri;
-
-  if (inputRedirectUri) {
-    inputRedirectUri.addEventListener('input', (e) => {
-      if (detectedRedirectUri) detectedRedirectUri.textContent = e.target.value.trim();
-    });
-  }
-
-  // Saved Client ID or Default Dummy Client ID
-  const savedClientId = window.localStorage.getItem('spotify_client_id') || '4007674e2eb842958dd17309b805cd69';
-  inputClientId.value = savedClientId;
-
-  auth = new SpotifyAuth(savedClientId, savedRedirectUri);
+  auth = new SpotifyAuth(CLIENT_ID, redirectUri);
   api = new SpotifyApiClient(auth);
   api.onLog = log;
 
@@ -161,13 +149,7 @@ async function setupLoggedInUser() {
 
 // Event Listeners
 btnLogin.addEventListener('click', () => {
-  const clientId = inputClientId.value.trim();
-  if (!clientId) {
-    alert('Please enter a valid Spotify Client ID.');
-    return;
-  }
-  window.localStorage.setItem('spotify_client_id', clientId);
-  auth.clientId = clientId;
+  auth.clientId = CLIENT_ID;
   auth.redirectToAuth();
 });
 
