@@ -308,42 +308,30 @@ export class SpotifyApiClient {
     let count = 0;
     for (let i = 0; i < trackIds.length; i += batchSize) {
       const batch = trackIds.slice(i, i + batchSize);
-      // Attempt 1: Raw JSON Array body (Official Web API spec)
+      // Attempt 1: Query parameter format (Accepted by Spotify API CORS)
       try {
-        await this.request('/me/tracks', {
-          method: 'DELETE',
-          body: JSON.stringify(batch)
+        await this.request(`/me/tracks?ids=${batch.join(',')}`, {
+          method: 'DELETE'
         });
         count += batch.length;
       } catch (e1) {
-        // Attempt 2: Object { ids: [...] }
+        // Attempt 2: Body array
         try {
           await this.request('/me/tracks', {
             method: 'DELETE',
-            body: JSON.stringify({ ids: batch })
+            body: JSON.stringify(batch)
           });
           count += batch.length;
         } catch (e2) {
-          // Attempt 3: Query Parameter
-          try {
-            await this.request(`/me/tracks?ids=${batch.join(',')}`, {
-              method: 'DELETE'
-            });
-            count += batch.length;
-          } catch (e3) {
-            // Attempt 4: Item-by-Item with array body
-            for (const singleId of batch) {
-              try {
-                await this.request('/me/tracks', {
-                  method: 'DELETE',
-                  body: JSON.stringify([singleId])
-                });
-              } catch (singleErr) {
-                this.log(`Could not remove track ${singleId}: ${singleErr.message}`, 'warning');
-              }
-              count++;
-              if (onProgress) onProgress(count, trackIds.length);
+          // Attempt 3: Individual item delete fallback
+          for (const singleId of batch) {
+            try {
+              await this.request(`/me/tracks?ids=${singleId}`, { method: 'DELETE' });
+            } catch (singleErr) {
+              this.log(`Could not remove track ${singleId}: ${singleErr.message}`, 'warning');
             }
+            count++;
+            if (onProgress) onProgress(count, trackIds.length);
           }
         }
       }
