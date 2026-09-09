@@ -38,24 +38,37 @@ export class SpotifyAuth {
   }
 
   async redirectToAuth() {
-    const codeVerifier = generateRandomString(64);
-    const hashed = await sha256(codeVerifier);
-    const codeChallenge = base64encode(hashed);
-
+    let codeVerifier = generateRandomString(64);
     window.localStorage.setItem('spotify_code_verifier', codeVerifier);
     window.localStorage.setItem('spotify_client_id', this.clientId);
+
+    let codeChallenge = '';
+    try {
+      if (window.crypto && window.crypto.subtle) {
+        const hashed = await sha256(codeVerifier);
+        codeChallenge = base64encode(hashed);
+      }
+    } catch (e) {
+      console.warn('SubtleCrypto PKCE hash failed, falling back to direct auth:', e);
+    }
+
+    const redirectTarget = this.redirectUri || (window.location.origin + window.location.pathname);
 
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: 'code',
-      redirect_uri: this.redirectUri,
+      redirect_uri: redirectTarget,
       scope: SCOPES,
-      code_challenge_method: 'S256',
-      code_challenge: codeChallenge,
       show_dialog: 'true'
     });
 
-    window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    if (codeChallenge) {
+      params.append('code_challenge_method', 'S256');
+      params.append('code_challenge', codeChallenge);
+    }
+
+    const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
+    window.location.href = authUrl;
   }
 
   async handleCallback(code) {

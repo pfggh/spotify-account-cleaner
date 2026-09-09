@@ -148,9 +148,27 @@ async function setupLoggedInUser() {
 }
 
 // Event Listeners
-btnLogin.addEventListener('click', () => {
-  auth.clientId = CLIENT_ID;
-  auth.redirectToAuth();
+btnLogin.addEventListener('click', async (e) => {
+  e.preventDefault();
+  try {
+    auth.clientId = CLIENT_ID;
+    auth.redirectUri = window.location.origin + window.location.pathname;
+    await auth.redirectToAuth();
+  } catch (err) {
+    console.error('Redirect failed, executing direct fallback:', err);
+    const scopes = encodeURIComponent([
+      'user-library-read',
+      'user-library-modify',
+      'playlist-read-private',
+      'playlist-read-collaborative',
+      'playlist-modify-public',
+      'playlist-modify-private',
+      'user-follow-read',
+      'user-follow-modify'
+    ].join(' '));
+    const target = encodeURIComponent(window.location.origin + window.location.pathname);
+    window.location.href = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${target}&scope=${scopes}&show_dialog=true`;
+  }
 });
 
 btnLogout.addEventListener('click', () => {
