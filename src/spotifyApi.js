@@ -25,15 +25,11 @@ export class SpotifyAuth {
   }
 
   redirectToAuth() {
-    const codeVerifier = generateRandomString(64);
-    window.localStorage.setItem('spotify_code_verifier', codeVerifier);
-    window.localStorage.setItem('spotify_client_id', this.clientId);
-
     const redirectTarget = this.redirectUri || (window.location.origin + window.location.pathname);
 
     const params = new URLSearchParams({
       client_id: this.clientId,
-      response_type: 'code',
+      response_type: 'token',
       redirect_uri: redirectTarget,
       scope: SCOPES,
       show_dialog: 'true'

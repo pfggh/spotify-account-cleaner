@@ -45,7 +45,24 @@ api.onLog = log;
 
 // Initialize application
 async function init() {
-  // Handle OAuth Redirect Code
+  // 1. Check for token in URL hash (Implicit Grant response_type=token)
+  if (window.location.hash && window.location.hash.includes('access_token=')) {
+    log('OAuth implicit token received from Spotify. Saving credentials...', 'info');
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const expiresIn = hashParams.get('expires_in');
+
+    if (accessToken) {
+      const expiresAt = Date.now() + (parseInt(expiresIn || '3600', 10) * 1000);
+      window.localStorage.setItem('spotify_access_token', accessToken);
+      window.localStorage.setItem('spotify_token_expires_at', expiresAt.toString());
+      // Clean hash from address bar
+      window.history.replaceState({}, document.title, window.location.pathname);
+      log('Successfully authenticated with Spotify!', 'success');
+    }
+  }
+
+  // 2. Check for OAuth Redirect Code (PKCE / Authorization Code)
   const urlParams = new URLSearchParams(window.location.search);
   const code = urlParams.get('code');
 
