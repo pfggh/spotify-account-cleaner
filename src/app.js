@@ -221,8 +221,43 @@ function setupEventListeners() {
     });
   }
 
-  if (btnScan) {
-    btnScan.addEventListener('click', scanAccount);
+  if (btnTriggerClean) {
+    btnTriggerClean.addEventListener('click', () => {
+      const totalToDelete = getSelectedTotalCount();
+      if (totalToDelete === 0) {
+        alert('No items selected or found to wipe. Please scan your account and select items.');
+        return;
+      }
+
+      if (modalTotalCount) modalTotalCount.textContent = totalToDelete;
+      if (inputConfirmText) inputConfirmText.value = '';
+      if (btnModalConfirm) btnModalConfirm.disabled = true;
+      if (modalConfirm) modalConfirm.classList.remove('hidden');
+    });
+  }
+
+  if (inputConfirmText) {
+    inputConfirmText.addEventListener('input', (e) => {
+      if (!btnModalConfirm) return;
+      if (e.target.value.trim() === 'DELETE EVERYTHING') {
+        btnModalConfirm.disabled = false;
+      } else {
+        btnModalConfirm.disabled = true;
+      }
+    });
+  }
+
+  if (btnModalCancel) {
+    btnModalCancel.addEventListener('click', () => {
+      if (modalConfirm) modalConfirm.classList.add('hidden');
+    });
+  }
+
+  if (btnModalConfirm) {
+    btnModalConfirm.addEventListener('click', async () => {
+      if (modalConfirm) modalConfirm.classList.add('hidden');
+      await executeCleanup();
+    });
   }
 }
 
@@ -288,36 +323,7 @@ async function scanAccount() {
   }
 }
 
-// Trigger Wiping Process
-btnTriggerClean.addEventListener('click', () => {
-  const totalToDelete = getSelectedTotalCount();
-  if (totalToDelete === 0) {
-    alert('No items selected or found to wipe. Please scan your account and select items.');
-    return;
-  }
-
-  modalTotalCount.textContent = totalToDelete;
-  inputConfirmText.value = '';
-  btnModalConfirm.disabled = true;
-  modalConfirm.classList.remove('hidden');
-});
-
-inputConfirmText.addEventListener('input', (e) => {
-  if (e.target.value.trim() === 'DELETE EVERYTHING') {
-    btnModalConfirm.disabled = false;
-  } else {
-    btnModalConfirm.disabled = true;
-  }
-});
-
-btnModalCancel.addEventListener('click', () => {
-  modalConfirm.classList.add('hidden');
-});
-
-btnModalConfirm.addEventListener('click', async () => {
-  modalConfirm.classList.add('hidden');
-  await executeCleanup();
-});
+// Helper Functions for Wiping Process
 
 function getSelectedTotalCount() {
   let count = 0;
