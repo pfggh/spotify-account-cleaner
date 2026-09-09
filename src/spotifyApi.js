@@ -308,41 +308,34 @@ export class SpotifyApiClient {
     let count = 0;
     for (let i = 0; i < trackIds.length; i += batchSize) {
       const batch = trackIds.slice(i, i + batchSize);
-      let success = false;
-
-      // Attempt 1: Query parameters (DELETE /me/tracks?ids=...)
+      const uris = batch.map(id => id.startsWith('spotify:track:') ? id : `spotify:track:${id}`);
+      
+      // Spotify 2026 API endpoint: DELETE /v1/me/library?uris=...
       try {
-        await this.request(`/me/tracks?ids=${batch.join(',')}`, {
+        await this.request(`/me/library?uris=${encodeURIComponent(uris.join(','))}`, {
           method: 'DELETE'
         });
         count += batch.length;
-        success = true;
       } catch (e1) {
-        this.log(`Batch query delete failed (${e1.message}). Retrying with JSON array body...`, 'warning');
-        // Attempt 2: JSON array body
+        // Fallback: DELETE /v1/me/tracks?ids=...
         try {
-          await this.request('/me/tracks', {
-            method: 'DELETE',
-            body: JSON.stringify(batch)
+          await this.request(`/me/tracks?ids=${batch.join(',')}`, {
+            method: 'DELETE'
           });
           count += batch.length;
-          success = true;
         } catch (e2) {
-          this.log(`Batch body delete failed (${e2.message}). Falling back to item-by-item...`, 'warning');
-          // Attempt 3: Individual item delete fallback
-          for (const singleId of batch) {
+          for (const singleUri of uris) {
             try {
-              await this.request(`/me/tracks?ids=${singleId}`, { method: 'DELETE' });
-              count++;
-            } catch (singleErr) {
-              this.log(`Could not remove track ${singleId}: ${singleErr.message}`, 'warning');
+              await this.request(`/me/library?uris=${encodeURIComponent(singleUri)}`, { method: 'DELETE' });
+            } catch (err) {
+              this.log(`Could not remove track ${singleUri}: ${err.message}`, 'warning');
             }
+            count++;
             if (onProgress) onProgress(count, trackIds.length);
           }
-          success = true;
         }
       }
-      if (onProgress && success) onProgress(Math.min(count, trackIds.length), trackIds.length);
+      if (onProgress) onProgress(Math.min(count, trackIds.length), trackIds.length);
       await new Promise(r => setTimeout(r, 150));
     }
   }
@@ -352,38 +345,27 @@ export class SpotifyApiClient {
     let count = 0;
     for (let i = 0; i < albumIds.length; i += batchSize) {
       const batch = albumIds.slice(i, i + batchSize);
+      const uris = batch.map(id => id.startsWith('spotify:album:') ? id : `spotify:album:${id}`);
       try {
-        await this.request('/me/albums', {
-          method: 'DELETE',
-          body: JSON.stringify(batch)
+        await this.request(`/me/library?uris=${encodeURIComponent(uris.join(','))}`, {
+          method: 'DELETE'
         });
         count += batch.length;
       } catch (e1) {
         try {
-          await this.request('/me/albums', {
-            method: 'DELETE',
-            body: JSON.stringify({ ids: batch })
+          await this.request(`/me/albums?ids=${batch.join(',')}`, {
+            method: 'DELETE'
           });
           count += batch.length;
         } catch (e2) {
-          try {
-            await this.request(`/me/albums?ids=${batch.join(',')}`, {
-              method: 'DELETE'
-            });
-            count += batch.length;
-          } catch (e3) {
-            for (const singleId of batch) {
-              try {
-                await this.request('/me/albums', {
-                  method: 'DELETE',
-                  body: JSON.stringify([singleId])
-                });
-              } catch (singleErr) {
-                this.log(`Could not remove album ${singleId}: ${singleErr.message}`, 'warning');
-              }
-              count++;
-              if (onProgress) onProgress(count, albumIds.length);
+          for (const singleUri of uris) {
+            try {
+              await this.request(`/me/library?uris=${encodeURIComponent(singleUri)}`, { method: 'DELETE' });
+            } catch (err) {
+              this.log(`Could not remove album ${singleUri}: ${err.message}`, 'warning');
             }
+            count++;
+            if (onProgress) onProgress(count, albumIds.length);
           }
         }
       }
