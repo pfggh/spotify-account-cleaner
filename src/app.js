@@ -15,12 +15,62 @@ const inventory = {
   shows: []
 };
 
-// DOM Elements
 const CLIENT_ID = '4007674e2eb842958dd17309b805cd69';
 const redirectUri = window.location.origin + window.location.pathname;
 
 auth = new SpotifyAuth(CLIENT_ID, redirectUri);
 api = new SpotifyApiClient(auth);
+
+// DOM Elements getter helpers to guarantee element presence
+let cardAuth, cardDashboard, btnLogin, btnLogout, userProfile, userAvatar, userName;
+let btnScan, scanBtnSpinner, scanBtnText, btnExportCsv;
+let countTracks, countPlaylists, countAlbums, countArtists, countEpisodes, countShows;
+let chkTracks, chkPlaylists, chkAlbums, chkArtists, chkEpisodes, chkShows;
+let btnTriggerClean, progressContainer, progressStatus, progressPercentage, progressBar, logWindow, btnClearLog;
+let modalConfirm, modalTotalCount, inputConfirmText, btnModalCancel, btnModalConfirm;
+
+function bindDomElements() {
+  cardAuth = document.getElementById('card-auth');
+  cardDashboard = document.getElementById('card-dashboard');
+  btnLogin = document.getElementById('btn-login');
+  btnLogout = document.getElementById('btn-logout');
+  userProfile = document.getElementById('user-profile');
+  userAvatar = document.getElementById('user-avatar');
+  userName = document.getElementById('user-name');
+
+  btnScan = document.getElementById('btn-scan');
+  scanBtnSpinner = document.getElementById('scan-btn-spinner');
+  scanBtnText = document.getElementById('scan-btn-text');
+  btnExportCsv = document.getElementById('btn-export-csv');
+
+  countTracks = document.getElementById('count-tracks');
+  countPlaylists = document.getElementById('count-playlists');
+  countAlbums = document.getElementById('count-albums');
+  countArtists = document.getElementById('count-artists');
+  countEpisodes = document.getElementById('count-episodes');
+  countShows = document.getElementById('count-shows');
+
+  chkTracks = document.getElementById('chk-tracks');
+  chkPlaylists = document.getElementById('chk-playlists');
+  chkAlbums = document.getElementById('chk-albums');
+  chkArtists = document.getElementById('chk-artists');
+  chkEpisodes = document.getElementById('chk-episodes');
+  chkShows = document.getElementById('chk-shows');
+
+  btnTriggerClean = document.getElementById('btn-trigger-clean');
+  progressContainer = document.getElementById('progress-container');
+  progressStatus = document.getElementById('progress-status');
+  progressPercentage = document.getElementById('progress-percentage');
+  progressBar = document.getElementById('progress-bar');
+  logWindow = document.getElementById('log-window');
+  btnClearLog = document.getElementById('btn-clear-log');
+
+  modalConfirm = document.getElementById('modal-confirm');
+  modalTotalCount = document.getElementById('modal-total-count');
+  inputConfirmText = document.getElementById('input-confirm-text');
+  btnModalCancel = document.getElementById('btn-modal-cancel');
+  btnModalConfirm = document.getElementById('btn-modal-confirm');
+}
 
 function log(message, type = 'info') {
   const time = new Date().toLocaleTimeString();
@@ -45,6 +95,9 @@ api.onLog = log;
 
 // Initialize application
 async function init() {
+  bindDomElements();
+  setupEventListeners();
+
   // 1. Check for token in URL hash (Implicit Grant response_type=token)
   if (window.location.hash && window.location.hash.includes('access_token=')) {
     log('OAuth implicit token received from Spotify. Saving credentials...', 'info');
@@ -121,38 +174,47 @@ async function setupLoggedInUser() {
   }
 }
 
-// Event Listeners
-if (btnLogin) {
-  btnLogin.addEventListener('click', (e) => {
-    e.preventDefault();
-    auth.clientId = CLIENT_ID;
-    auth.redirectUri = window.location.origin + window.location.pathname;
-    auth.redirectToAuth();
-  });
-}
-
-btnLogout.addEventListener('click', () => {
-  auth.logout();
-  showAuthCard();
-  log('Logged out of Spotify.', 'info');
-});
-
-btnClearLog.addEventListener('click', () => {
-  logWindow.innerHTML = '';
-});
-
-btnExportCsv.addEventListener('click', () => {
-  const total = Object.values(inventory).reduce((acc, arr) => acc + arr.length, 0);
-  if (total === 0) {
-    alert('No items scanned yet. Please click "Scan Account" first to load your library.');
-    return;
+function setupEventListeners() {
+  if (btnLogin) {
+    btnLogin.addEventListener('click', (e) => {
+      e.preventDefault();
+      auth.clientId = CLIENT_ID;
+      auth.redirectUri = window.location.origin + window.location.pathname;
+      auth.redirectToAuth();
+    });
   }
-  log(`Exporting CSV backup for ${total} items...`, 'highlight');
-  exportLibraryToCsv(inventory, currentUserId);
-  log(`CSV export generated and downloaded successfully!`, 'success');
-});
 
-btnScan.addEventListener('click', scanAccount);
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+      auth.logout();
+      showAuthCard();
+      log('Logged out of Spotify.', 'info');
+    });
+  }
+
+  if (btnClearLog) {
+    btnClearLog.addEventListener('click', () => {
+      if (logWindow) logWindow.innerHTML = '';
+    });
+  }
+
+  if (btnExportCsv) {
+    btnExportCsv.addEventListener('click', () => {
+      const total = Object.values(inventory).reduce((acc, arr) => acc + arr.length, 0);
+      if (total === 0) {
+        alert('No items scanned yet. Please click "Scan Account" first to load your library.');
+        return;
+      }
+      log(`Exporting CSV backup for ${total} items...`, 'highlight');
+      exportLibraryToCsv(inventory, currentUserId);
+      log(`CSV export generated and downloaded successfully!`, 'success');
+    });
+  }
+
+  if (btnScan) {
+    btnScan.addEventListener('click', scanAccount);
+  }
+}
 
 function animateCounter(element, targetVal) {
   let startVal = parseInt(element.textContent || '0', 10);
