@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Spotify Auto-Purge & Library Cleaner",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "1-Click automated Spotify library wipe (Liked Songs, Albums, Playlists) right from open.spotify.com.",
   "permissions": [
     "activeTab",
@@ -11,11 +11,17 @@
     "https://open.spotify.com/*",
     "https://api.spotify.com/*"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected_interceptor.js"],
+      "matches": ["https://open.spotify.com/*"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["https://open.spotify.com/*"],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     }
   ],
   "action": {

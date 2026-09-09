@@ -1,14 +1,37 @@
 (function () {
   'use strict';
 
+  // Inject page script interceptor into main document context immediately
+  const scriptNode = document.createElement('script');
+  scriptNode.src = chrome.runtime.getURL('injected_interceptor.js');
+  (document.head || document.documentElement).appendChild(scriptNode);
+  scriptNode.onload = function () {
+    scriptNode.remove();
+  };
+
   if (window.__SPOTIFY_PURGE_LOADED__) return;
   window.__SPOTIFY_PURGE_LOADED__ = true;
 
-  console.log('[Spotify Purge Chrome Extension] Loaded on open.spotify.com');
+  console.log('[Spotify Purge Extension] Content script initialized.');
 
+  let capturedToken = null;
   let isRunning = false;
 
+  window.addEventListener('SPOTIFY_TOKEN_CAPTURED', (e) => {
+    if (e.detail && e.detail.token) {
+      capturedToken = e.detail.token;
+      console.log('[Spotify Purge Extension] Bearer token captured live!');
+    }
+  });
+
   async function getSessionToken() {
+    if (capturedToken) return capturedToken;
+
+    if (window.__SPOTIFY_CAPTURED_TOKEN__) {
+      return window.__SPOTIFY_CAPTURED_TOKEN__;
+    }
+
+    // Try fetching access token endpoint as secondary strategy
     try {
       const res = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
         headers: { 'Accept': 'application/json' }
@@ -19,10 +42,9 @@
           return data.accessToken;
         }
       }
-    } catch (e) {
-      console.warn('[Spotify Purge Extension] Session token fetch error:', e);
-    }
+    } catch (e) {}
 
+    // Secondary fallback: search localStorage
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && (key.includes('token') || key.includes('session'))) {
@@ -58,7 +80,7 @@
       try {
         const parsed = JSON.parse(errText);
         msg = parsed.error?.message || msg;
-      } catch(e) {}
+      } catch (e) {}
       throw new Error(msg);
     }
     return res.json();
@@ -70,23 +92,23 @@
 
     try {
       updateLog('🔑 Extracting active Spotify session token...', 'info');
-      const webToken = await getSessionToken();
+      const token = await getSessionToken();
 
-      if (!webToken) {
-        throw new Error('Could not find active session token! Make sure you are logged in to open.spotify.com.');
+      if (!token) {
+        throw new Error('No active session token captured yet. Please refresh the page or click around Spotify once while logged in!');
       }
 
       updateLog('✅ Session authenticated successfully!', 'success');
 
-      const user = await apiRequest('/me', 'GET', null, webToken);
-      updateLog(`👤 Wiping account for user: ${user.display_name || user.id} (${user.id})`, 'success');
+      const user = await apiRequest('/me', 'GET', null, token);
+      updateLog(`👤 Logged in as: ${user.display_name || user.id} (${user.id})`, 'success');
 
-      // 1. Liked Songs Purge
-      updateLog('🔍 Fetching Liked Songs...', 'info');
+      // 1. Liked Songs
+      updateLog('🔍 Scanning Liked Songs...', 'info');
       let likedTracks = [];
       let nextUrl = '/me/tracks?limit=50';
       while (nextUrl) {
-        const res = await apiRequest(nextUrl, 'GET', null, webToken);
+        const res = await apiRequest(nextUrl, 'GET', null, token);
         if (!res || !res.items) break;
         likedTracks = likedTracks.concat(res.items);
         nextUrl = res.next;
@@ -99,13 +121,13 @@
           const batch = trackUris.slice(i, i + 50);
           updateProgress(i, trackUris.length, 'Liked Songs');
           try {
-            await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, webToken);
+            await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, token);
             updateLog(`✔ Deleted batch ${Math.floor(i / 50) + 1} (${Math.min(i + 50, trackUris.length)}/${trackUris.length})`, 'info');
           } catch (e) {
             updateLog(`⚠️ Batch fallback active: ${e.message}`, 'warning');
             for (const singleUri of batch) {
               try {
-                await apiRequest(`/me/library?uris=${encodeURIComponent(singleUri)}`, 'DELETE', null, webToken);
+                await apiRequest(`/me/library?uris=${encodeURIComponent(singleUri)}`, 'DELETE', null, token);
               } catch (err) {}
             }
           }
@@ -114,12 +136,12 @@
         updateLog('✨ All Liked Songs deleted!', 'success');
       }
 
-      // 2. Saved Albums Purge
-      updateLog('🔍 Fetching Saved Albums...', 'info');
+      // 2. Saved Albums
+      updateLog('🔍 Scanning Saved Albums...', 'info');
       let savedAlbums = [];
       let albumUrl = '/me/albums?limit=50';
       while (albumUrl) {
-        const res = await apiRequest(albumUrl, 'GET', null, webToken);
+        const res = await apiRequest(albumUrl, 'GET', null, token);
         if (!res || !res.items) break;
         savedAlbums = savedAlbums.concat(res.items);
         albumUrl = res.next;
@@ -131,11 +153,11 @@
         for (let i = 0; i < albumUris.length; i += 50) {
           const batch = albumUris.slice(i, i + 50);
           try {
-            await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, webToken);
+            await apiRequest(`/me/library?uris=${encodeURIComponent(batch.join(','))}`, 'DELETE', null, token);
           } catch (e) {
             for (const singleUri of batch) {
               try {
-                await apiRequest(`/me/library?uris=${encodeURIComponent(singleUri)}`, 'DELETE', null, webToken);
+                await apiRequest(`/me/library?uris=${encodeURIComponent(singleUri)}`, 'DELETE', null, token);
               } catch (err) {}
             }
           }
@@ -143,12 +165,12 @@
         updateLog('✨ All Saved Albums deleted!', 'success');
       }
 
-      // 3. Playlists Purge
-      updateLog('🔍 Fetching Playlists...', 'info');
+      // 3. Playlists
+      updateLog('🔍 Scanning Playlists...', 'info');
       let playlists = [];
       let playlistUrl = '/me/playlists?limit=50';
       while (playlistUrl) {
-        const res = await apiRequest(playlistUrl, 'GET', null, webToken);
+        const res = await apiRequest(playlistUrl, 'GET', null, token);
         if (!res || !res.items) break;
         playlists = playlists.concat(res.items);
         playlistUrl = res.next;
@@ -158,7 +180,7 @@
       for (let i = 0; i < playlists.length; i++) {
         const p = playlists[i];
         try {
-          await apiRequest(`/playlists/${p.id}/followers`, 'DELETE', null, webToken);
+          await apiRequest(`/playlists/${p.id}/followers`, 'DELETE', null, token);
           updateLog(`✔ Unfollowed: ${p.name}`, 'info');
         } catch (e) {
           updateLog(`Could not unfollow ${p.name}: ${e.message}`, 'warning');
@@ -311,9 +333,13 @@
     };
   }
 
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    injectFloatingUI();
-  } else {
-    window.addEventListener('DOMContentLoaded', injectFloatingUI);
+  function initUI() {
+    if (document.body) {
+      injectFloatingUI();
+    } else {
+      window.addEventListener('DOMContentLoaded', injectFloatingUI);
+    }
   }
+
+  initUI();
 })();
